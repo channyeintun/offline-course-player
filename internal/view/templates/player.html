@@ -1,7 +1,7 @@
 {{define "player"}}
 	{{if .CurrentVideo}}
 		<div class="relative w-full aspect-video bg-black border border-carbon-gray-20 overflow-hidden shadow-2xl">
-			<video id="vid-{{now}}" class="w-full h-full outline-none" controls {{if .ShouldAutoplay}}autoplay{{end}}
+			<video id="vid-{{now}}" class="w-full h-full outline-none" controls {{if .ShouldAutoplay}}autoplay{{end}} preload="auto"
 				   onplay="if(!this.dataset.speedSet){ this.playbackRate = parseFloat('{{.Speed}}'); this.dataset.speedSet = 'true'; }"
 				   hx-on:htmx:before-swap="this.pause(); this.removeAttribute('src'); this.load();"
 				   hx-post="/ended?path={{urlencode .CurrentVideo.Path}}" 
