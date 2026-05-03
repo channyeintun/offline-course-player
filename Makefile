@@ -5,10 +5,12 @@ MAIN_PACKAGE := ./cmd/server
 
 all: build
 
-## build: Build the server binary
+## build: Build the server binaries for Mac and Windows
 build:
-	@echo "Building the server..."
-	go build -o $(BINARY_NAME) $(MAIN_PACKAGE)
+	@echo "Building for Mac..."
+	GOOS=darwin go build -o app-mac $(MAIN_PACKAGE)
+	@echo "Building for Windows..."
+	GOOS=windows GOARCH=amd64 go build -o app-windows.exe $(MAIN_PACKAGE)
 
 ## run: Run the server directly
 run:
@@ -18,7 +20,7 @@ run:
 ## clean: Remove build artifacts
 clean:
 	@echo "Cleaning up..."
-	rm -f $(BINARY_NAME)
+	rm -f app-mac app-windows.exe $(BINARY_NAME)
 
 ## help: Show this help message
 help:
