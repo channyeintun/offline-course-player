@@ -25,6 +25,18 @@
 			{{template "autoplay-btn" .}}
 		</div>
 	{{end}}
+	{{if .CurrentVideo}}
+	<style>
+		#video-item-{{.CurrentVideo.Path | hash}} {
+			background-color: #f4f4f4 !important;
+			border-color: #0f62fe !important;
+			color: #161616 !important;
+		}
+		#video-item-{{.CurrentVideo.Path | hash}} .pulse-indicator {
+			display: block !important;
+		}
+	</style>
+	{{end}}
 {{end}}
 
 {{define "autoplay-btn"}}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/channyeintun/go-server-for-courses/internal/model"
@@ -95,7 +96,6 @@ func (h *AppHandler) Play(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	sections := video.GroupBySection(h.videos)
 	autoPlay := h.autoPlay
 	h.mu.Unlock()
 
@@ -115,18 +115,6 @@ func (h *AppHandler) Play(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("template rendering failed: %v", err), http.StatusInternalServerError)
 		return
 	}
-
-	w.Write([]byte("\n<aside id=\"playlist-container\" hx-swap-oob=\"true\" class=\"w-full md:w-[400px] bg-white border-l border-carbon-gray-20 flex flex-col h-[50vh] md:h-screen shrink-0 relative z-20 shadow-xl\">\n"))
-	if err := h.tmpl.ExecuteTemplate(w, "playlist", struct {
-		Sections     []model.Section
-		CurrentVideo *model.Video
-	}{
-		Sections:     sections,
-		CurrentVideo: &current,
-	}); err != nil {
-		http.Error(w, fmt.Sprintf("template rendering failed: %v", err), http.StatusInternalServerError)
-	}
-	w.Write([]byte("\n</aside>"))
 }
 
 // Autoplay toggles the autoplay feature.
@@ -220,15 +208,13 @@ func (h *AppHandler) Ended(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Write([]byte("\n<aside id=\"playlist-container\" hx-swap-oob=\"true\" class=\"w-full md:w-[400px] bg-white border-l border-carbon-gray-20 flex flex-col h-[50vh] md:h-screen shrink-0 relative z-20 shadow-xl\">\n"))
-	if err := h.tmpl.ExecuteTemplate(w, "playlist", struct {
-		Sections     []model.Section
-		CurrentVideo *model.Video
-	}{
-		Sections:     video.GroupBySection(h.videos),
-		CurrentVideo: targetVideo,
-	}); err != nil {
-		http.Error(w, fmt.Sprintf("template rendering failed: %v", err), http.StatusInternalServerError)
+	if current.Completed {
+		var buf strings.Builder
+		if err := h.tmpl.ExecuteTemplate(&buf, "toggle-btn", map[string]interface{}{"Video": current}); err != nil {
+			http.Error(w, fmt.Sprintf("template rendering failed: %v", err), http.StatusInternalServerError)
+			return
+		}
+		html := strings.Replace(buf.String(), "<form ", "<form hx-swap-oob=\"true\" ", 1)
+		w.Write([]byte(html))
 	}
-	w.Write([]byte("\n</aside>"))
 }

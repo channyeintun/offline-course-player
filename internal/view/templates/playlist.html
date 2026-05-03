@@ -25,22 +25,19 @@
 
 {{define "video-item"}}
 	<div id="video-item-{{.Video.Path | hash}}" 
-		 class="group relative flex items-center gap-4 px-6 py-4 cursor-pointer transition-all duration-150 border-l-4
-		 {{if eq .Video.Path .CurrentPath}} bg-carbon-gray-10 border-carbon-blue-60 text-carbon-gray-100 {{else}} bg-transparent border-transparent text-carbon-gray-70 hover:bg-carbon-gray-10 hover:text-carbon-gray-100 {{end}}"
+		 class="group relative flex items-center gap-4 px-6 py-4 cursor-pointer transition-all duration-150 border-l-4 bg-transparent border-transparent text-carbon-gray-70 hover:bg-carbon-gray-10 hover:text-carbon-gray-100"
 		 hx-get="/play?path={{urlencode .Video.Path}}" hx-target="#player-container">
 		
 		{{template "toggle-btn" dict "Video" .Video}}
 		
 		<span class="text-sm flex-1 leading-tight tracking-tight">{{formatTitle .Video.Name}}</span>
 		
-		{{if eq .Video.Path .CurrentPath}}
-			<div class="w-1.5 h-1.5 bg-carbon-blue-60 animate-pulse"></div>
-		{{end}}
+		<div class="pulse-indicator hidden w-1.5 h-1.5 bg-carbon-blue-60 animate-pulse"></div>
 	</div>
 {{end}}
 
 {{define "toggle-btn"}}
-	<form hx-post="/toggle?path={{urlencode .Video.Path}}" hx-target="this" hx-swap="outerHTML" class="flex items-center m-0">
+	<form id="toggle-{{.Video.Path | hash}}" hx-post="/toggle?path={{urlencode .Video.Path}}" hx-target="this" hx-swap="outerHTML" class="flex items-center m-0">
 		<button type="submit" class="group/checkbox relative w-5 h-5 flex items-center justify-center transition-all duration-100 focus:outline-none
 			{{if .Video.Completed}} text-white {{else}} text-transparent {{end}}"
 			onclick="event.stopPropagation()">
