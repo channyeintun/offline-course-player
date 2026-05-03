@@ -59,3 +59,23 @@ func GroupBySection(videos []model.Video) []model.Section {
 	}
 	return sections
 }
+
+// FindNext finds the current video and the next video in the sequence based on section grouping.
+func FindNext(videos []model.Video, currentPath string) (current, next model.Video, found bool) {
+	sections := GroupBySection(videos)
+	var flat []model.Video
+	for _, sec := range sections {
+		flat = append(flat, sec.Videos...)
+	}
+
+	for i, v := range flat {
+		if v.Path == currentPath {
+			current = v
+			if i+1 < len(flat) {
+				return current, flat[i+1], true
+			}
+			return current, model.Video{}, false
+		}
+	}
+	return model.Video{}, model.Video{}, false
+}

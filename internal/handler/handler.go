@@ -61,28 +61,19 @@ func (h *AppHandler) Home(w http.ResponseWriter, r *http.Request) {
 func (h *AppHandler) Toggle(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	var toggledVideo model.Video
-	for i, v := range h.videos {
-		if v.Path == path {
-			h.videos[i].Completed = !h.videos[i].Completed
-			toggledVideo = h.videos[i]
-			break
-		}
-	}
-	if err := h.progressStore.Save(h.videos); err != nil {
-		http.Error(w, fmt.Sprintf("failed to save progress: %v", err), http.StatusInternalServerError)
+	v, err := h.toggleVideoCompletion(path)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if err := h.tmpl.ExecuteTemplate(w, "toggle-btn", map[string]interface{}{
-		"Video": toggledVideo,
+		"Video": v,
 	}); err != nil {
 		http.Error(w, fmt.Sprintf("template rendering failed: %v", err), http.StatusInternalServerError)
 	}
 }
+
 
 // Play returns the player HTML for the requested video.
 func (h *AppHandler) Play(w http.ResponseWriter, r *http.Request) {
@@ -138,83 +129,117 @@ func (h *AppHandler) Autoplay(w http.ResponseWriter, r *http.Request) {
 // Ended handles the logic when a video finishes playing.
 func (h *AppHandler) Ended(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
-	speedStr := r.FormValue("speed")
-	var speed float64
-	fmt.Sscanf(speedStr, "%f", &speed)
-	if speed <= 0 {
-		speed = 1.0
+	speed := parseSpeed(r.FormValue("speed"))
+
+	state, err := h.updateProgress(path, true, speed)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
+	// Determine what to show next
+	targetVideo := state.Current
+	shouldAutoplay := state.AutoPlay && state.Found
+	if shouldAutoplay {
+		targetVideo = state.Next
+	}
+
+	h.renderPlayerResponse(w, targetVideo, state.AutoPlay, state.PlaybackRate, shouldAutoplay)
+	h.renderToggleOOB(w, state.Current)
+}
+
+
+
+
+type ProgressState struct {
+	Current      model.Video
+	Next         model.Video
+	Found        bool
+	AutoPlay     bool
+	PlaybackRate float64
+}
+
+func (h *AppHandler) updateProgress(path string, completed bool, speed float64) (ProgressState, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	h.playbackRate = speed
 
-	var current model.Video
-	var next model.Video
-	found := false
-
-	var flatVideos []model.Video
-	sections := video.GroupBySection(h.videos)
-	for _, sec := range sections {
-		flatVideos = append(flatVideos, sec.Videos...)
-	}
-
-	for i, v := range flatVideos {
-		if v.Path == path {
-			current = v
-			if i+1 < len(flatVideos) {
-				next = flatVideos[i+1]
-				found = true
-			}
-			break
-		}
-	}
-
+	// Mark as completed
 	for i, v := range h.videos {
 		if v.Path == path {
-			h.videos[i].Completed = true
+			h.videos[i].Completed = completed
 			break
 		}
 	}
 
 	if err := h.progressStore.Save(h.videos); err != nil {
-		http.Error(w, fmt.Sprintf("failed to save progress: %v", err), http.StatusInternalServerError)
-		return
+		return ProgressState{}, fmt.Errorf("failed to save progress: %w", err)
 	}
 
-	var targetVideo *model.Video
-	if h.autoPlay && found {
-		targetVideo = &next
-	} else {
-		current.Completed = true
-		targetVideo = &current
+	current, next, found := video.FindNext(h.videos, path)
+	return ProgressState{
+		Current:      current,
+		Next:         next,
+		Found:        found,
+		AutoPlay:     h.autoPlay,
+		PlaybackRate: h.playbackRate,
+	}, nil
+}
+
+func (h *AppHandler) toggleVideoCompletion(path string) (model.Video, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	var toggled model.Video
+	for i, v := range h.videos {
+		if v.Path == path {
+			h.videos[i].Completed = !h.videos[i].Completed
+			toggled = h.videos[i]
+			break
+		}
 	}
 
+	if err := h.progressStore.Save(h.videos); err != nil {
+		return model.Video{}, fmt.Errorf("failed to save progress: %w", err)
+	}
+	return toggled, nil
+}
+
+func (h *AppHandler) renderPlayerResponse(w http.ResponseWriter, v model.Video, autoPlay bool, speed float64, shouldAutoplay bool) {
 	data := struct {
 		CurrentVideo   *model.Video
 		AutoPlay       bool
 		Speed          float64
 		ShouldAutoplay bool
 	}{
-		CurrentVideo:   targetVideo,
-		AutoPlay:       h.autoPlay,
-		Speed:          h.playbackRate,
-		ShouldAutoplay: h.autoPlay && found,
+		CurrentVideo:   &v,
+		AutoPlay:       autoPlay,
+		Speed:          speed,
+		ShouldAutoplay: shouldAutoplay,
 	}
 
 	if err := h.tmpl.ExecuteTemplate(w, "player", data); err != nil {
 		http.Error(w, fmt.Sprintf("template rendering failed: %v", err), http.StatusInternalServerError)
+	}
+}
+
+
+func (h *AppHandler) renderToggleOOB(w http.ResponseWriter, v model.Video) {
+	var buf strings.Builder
+	if err := h.tmpl.ExecuteTemplate(&buf, "toggle-btn", map[string]interface{}{"Video": v}); err != nil {
+		http.Error(w, fmt.Sprintf("template rendering failed: %v", err), http.StatusInternalServerError)
 		return
 	}
+	// Add hx-swap-oob="true" to the form tag for HTMX out-of-band swap
+	html := strings.Replace(buf.String(), "<form ", "<form hx-swap-oob=\"true\" ", 1)
+	w.Write([]byte(html))
+}
 
-	if current.Completed {
-		var buf strings.Builder
-		if err := h.tmpl.ExecuteTemplate(&buf, "toggle-btn", map[string]interface{}{"Video": current}); err != nil {
-			http.Error(w, fmt.Sprintf("template rendering failed: %v", err), http.StatusInternalServerError)
-			return
-		}
-		html := strings.Replace(buf.String(), "<form ", "<form hx-swap-oob=\"true\" ", 1)
-		w.Write([]byte(html))
+func parseSpeed(s string) float64 {
+	var speed float64
+	if _, err := fmt.Sscanf(s, "%f", &speed); err != nil || speed <= 0 {
+		return 1.0
 	}
+	return speed
 }
