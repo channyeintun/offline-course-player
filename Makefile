@@ -1,18 +1,28 @@
-APP_NAME := app
-SOURCE := main.go
+BINARY_NAME := server
+MAIN_PACKAGE := ./cmd/server
 
-all: build-mac build-windows
+.PHONY: all build run clean help
 
-build-mac:
-	@echo "Building for macOS..."
-	GOOS=darwin GOARCH=amd64 go build -o $(APP_NAME)-mac $(SOURCE)
+all: build
 
-build-windows:
-	@echo "Building for Windows..."
-	GOOS=windows GOARCH=amd64 go build -o $(APP_NAME)-windows.exe $(SOURCE)
+## build: Build the server binary
+build:
+	@echo "Building the server..."
+	go build -o $(BINARY_NAME) $(MAIN_PACKAGE)
 
+## run: Run the server directly
+run:
+	@echo "Running the server..."
+	go run $(MAIN_PACKAGE)
+
+## clean: Remove build artifacts
 clean:
-	@echo "Cleaning up build artifacts..."
-	rm -f $(APP_NAME)-mac $(APP_NAME)-windows.exe
+	@echo "Cleaning up..."
+	rm -f $(BINARY_NAME)
 
-.PHONY: all build-mac build-windows clean
+## help: Show this help message
+help:
+	@echo "Usage: make [target]"
+	@echo ""
+	@echo "Targets:"
+	@grep -E '^##' $(MAKEFILE_LIST) | sed -e 's/## //g' | column -t -s ':'
