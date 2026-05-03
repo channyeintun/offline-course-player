@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"html/template"
 	"net/url"
-	"path/filepath"
 	"strings"
+	"time"
 )
 
 //go:embed templates/*.html
@@ -16,7 +16,12 @@ var templatesFS embed.FS
 func ParseTemplates() (*template.Template, error) {
 	tmpl := template.New("base").Funcs(template.FuncMap{
 		"formatTitle": formatTitle,
+		"formatSectionTitle": formatSectionTitle,
 		"urlencode":   url.QueryEscape,
+		"pathencode":  url.PathEscape,
+		"now": func() string {
+			return fmt.Sprintf("%d", time.Now().UnixNano())
+		},
 		"dict": func(values ...interface{}) map[string]interface{} {
 			if len(values)%2 != 0 {
 				return nil
@@ -33,6 +38,9 @@ func ParseTemplates() (*template.Template, error) {
 		},
 		"hash": func(s string) string {
 			return fmt.Sprintf("%x", s)
+		},
+		"slice": func(items ...interface{}) []interface{} {
+			return items
 		},
 	})
 	
@@ -52,7 +60,15 @@ func isNumeric(s string) bool {
 }
 
 func formatTitle(name string) string {
-	title := strings.TrimSuffix(name, filepath.Ext(name))
+	title := name
+	exts := []string{".mp4", ".mkv", ".webm", ".avi", ".mov", ".m4v"}
+	for _, ext := range exts {
+		if strings.HasSuffix(strings.ToLower(title), ext) {
+			title = title[:len(title)-len(ext)]
+			break
+		}
+	}
+	
 	parts := strings.SplitN(title, "_", 2)
 	if len(parts) == 2 && isNumeric(parts[0]) {
 		title = parts[1]
@@ -63,4 +79,19 @@ func formatTitle(name string) string {
 		}
 	}
 	return strings.ReplaceAll(title, "_", " ")
+}
+
+func formatSectionTitle(name string) string {
+	formatted := formatTitle(name)
+	isNumeric := true
+	for _, c := range strings.TrimSpace(formatted) {
+		if c < '0' || c > '9' {
+			isNumeric = false
+			break
+		}
+	}
+	if isNumeric && strings.TrimSpace(formatted) != "" {
+		return "Section " + strings.TrimSpace(formatted)
+	}
+	return formatted
 }

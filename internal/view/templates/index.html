@@ -1,6 +1,6 @@
 {{define "index"}}
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,23 +12,23 @@
 	<script src="https://unpkg.com/htmx.org@1.9.10"></script>
 	<script>
 		tailwind.config = {
-			darkMode: 'class',
 			theme: {
 				extend: {
 					colors: {
 						carbon: {
 							gray: {
-								10: '#f4f4f4',
-								20: '#e0e0e0',
-								30: '#c6c6c6',
-								70: '#525252',
-								80: '#393939',
-								90: '#262626',
-								100: '#161616',
+								'10': '#f4f4f4',
+								'20': '#e0e0e0',
+								'30': '#c6c6c6',
+								'50': '#8d8d8d',
+								'70': '#525252',
+								'80': '#393939',
+								'90': '#262626',
+								'100': '#161616',
 							},
 							blue: {
-								60: '#0f62fe',
-								70: '#0043ce',
+								'60': '#0f62fe',
+								'70': '#0043ce',
 							}
 						}
 					},
@@ -41,27 +41,29 @@
 	</script>
 	<style>
 		::-webkit-scrollbar { width: 4px; }
-		::-webkit-scrollbar-track { background: #161616; }
-		::-webkit-scrollbar-thumb { background-color: #393939; }
-		::-webkit-scrollbar-thumb:hover { background-color: #525252; }
+		::-webkit-scrollbar-track { background: #f4f4f4; }
+		::-webkit-scrollbar-thumb { background-color: #c6c6c6; }
+		::-webkit-scrollbar-thumb:hover { background-color: #8d8d8d; }
 		
 		body {
-			background-color: #161616;
-			color: #f4f4f4;
+			background-color: #ffffff;
+			color: #161616;
 		}
 	</style>
 </head>
-<body class="h-screen overflow-hidden flex flex-col md:flex-row font-sans selection:bg-carbon-blue-60/30">
+<body class="h-screen overflow-hidden flex flex-col md:flex-row font-sans selection:bg-carbon-blue-60/10 text-carbon-gray-100"
+	  hx-on:htmx:before-swap="window.sidebarScroll = document.querySelector('#playlist-container .overflow-y-auto') ? document.querySelector('#playlist-container .overflow-y-auto').scrollTop : 0"
+	  hx-on:htmx:after-settle="if(document.querySelector('#playlist-container .overflow-y-auto')) document.querySelector('#playlist-container .overflow-y-auto').scrollTop = window.sidebarScroll">
 	
 	<!-- Main Player Area -->
-	<main class="flex-1 flex flex-col items-center justify-center p-0 md:p-12 bg-black relative z-10 border-r border-carbon-gray-80">
+	<main class="flex-1 flex flex-col items-center justify-center p-0 md:p-12 bg-carbon-gray-10 relative z-10 border-r border-carbon-gray-20">
 		<div id="player-container" class="w-full max-w-5xl flex flex-col gap-6">
-			{{template "player" .}}
+			{{template "player" dict "CurrentVideo" .CurrentVideo "AutoPlay" .AutoPlay "Speed" .Speed}}
 		</div>
 	</main>
 
 	<!-- Sidebar / Playlist -->
-	<aside id="playlist-container" class="w-full md:w-[360px] bg-carbon-gray-100 flex flex-col h-[50vh] md:h-screen shrink-0 border-l border-carbon-gray-80 shadow-xl">
+	<aside id="playlist-container" class="w-full md:w-[360px] bg-white flex flex-col h-[50vh] md:h-screen shrink-0 border-l border-carbon-gray-20 shadow-sm">
 		{{template "playlist" .}}
 	</aside>
 

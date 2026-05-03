@@ -17,6 +17,7 @@ type AppHandler struct {
 	videos        []model.Video
 	progressStore *progress.Store
 	autoPlay      bool
+	playbackRate  float64
 	tmpl          *template.Template
 }
 
@@ -26,6 +27,7 @@ func NewAppHandler(videos []model.Video, progressStore *progress.Store, tmpl *te
 		videos:        videos,
 		progressStore: progressStore,
 		autoPlay:      false,
+		playbackRate:  1.0,
 		tmpl:          tmpl,
 	}
 }
@@ -38,12 +40,16 @@ func (h *AppHandler) Home(w http.ResponseWriter, r *http.Request) {
 	h.mu.Unlock()
 
 	data := struct {
-		Sections     []model.Section
-		CurrentVideo *model.Video
-		AutoPlay     bool
+		Sections       []model.Section
+		CurrentVideo   *model.Video
+		AutoPlay       bool
+		Speed          float64
+		ShouldAutoplay bool
 	}{
-		Sections: sections,
-		AutoPlay: autoPlay,
+		Sections:       sections,
+		AutoPlay:       autoPlay,
+		Speed:          h.playbackRate,
+		ShouldAutoplay: false,
 	}
 	if err := h.tmpl.ExecuteTemplate(w, "index", data); err != nil {
 		http.Error(w, fmt.Sprintf("template rendering failed: %v", err), http.StatusInternalServerError)
@@ -94,11 +100,15 @@ func (h *AppHandler) Play(w http.ResponseWriter, r *http.Request) {
 	h.mu.Unlock()
 
 	data := struct {
-		CurrentVideo *model.Video
-		AutoPlay     bool
+		CurrentVideo   *model.Video
+		AutoPlay       bool
+		Speed          float64
+		ShouldAutoplay bool
 	}{
-		CurrentVideo: &current,
-		AutoPlay:     autoPlay,
+		CurrentVideo:   &current,
+		AutoPlay:       autoPlay,
+		Speed:          h.playbackRate,
+		ShouldAutoplay: true,
 	}
 
 	if err := h.tmpl.ExecuteTemplate(w, "player", data); err != nil {
@@ -106,7 +116,7 @@ func (h *AppHandler) Play(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Write([]byte("\n<div id=\"playlist-container\" hx-swap-oob=\"true\" class=\"w-full md:w-[400px] bg-gray-900 border-l border-gray-800 flex flex-col h-[50vh] md:h-screen shrink-0\">\n"))
+	w.Write([]byte("\n<aside id=\"playlist-container\" hx-swap-oob=\"true\" class=\"w-full md:w-[400px] bg-white border-l border-carbon-gray-20 flex flex-col h-[50vh] md:h-screen shrink-0 relative z-20 shadow-xl\">\n"))
 	if err := h.tmpl.ExecuteTemplate(w, "playlist", struct {
 		Sections     []model.Section
 		CurrentVideo *model.Video
@@ -116,7 +126,7 @@ func (h *AppHandler) Play(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		http.Error(w, fmt.Sprintf("template rendering failed: %v", err), http.StatusInternalServerError)
 	}
-	w.Write([]byte("\n</div>"))
+	w.Write([]byte("\n</aside>"))
 }
 
 // Autoplay toggles the autoplay feature.
@@ -126,7 +136,13 @@ func (h *AppHandler) Autoplay(w http.ResponseWriter, r *http.Request) {
 	autoPlay := h.autoPlay
 	h.mu.Unlock()
 
-	if err := h.tmpl.ExecuteTemplate(w, "autoplay-btn", struct{ AutoPlay bool }{AutoPlay: autoPlay}); err != nil {
+	if err := h.tmpl.ExecuteTemplate(w, "autoplay-btn", struct {
+		AutoPlay bool
+		Speed    float64
+	}{
+		AutoPlay: autoPlay,
+		Speed:    h.playbackRate,
+	}); err != nil {
 		http.Error(w, fmt.Sprintf("template rendering failed: %v", err), http.StatusInternalServerError)
 	}
 }
@@ -134,9 +150,17 @@ func (h *AppHandler) Autoplay(w http.ResponseWriter, r *http.Request) {
 // Ended handles the logic when a video finishes playing.
 func (h *AppHandler) Ended(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
+	speedStr := r.FormValue("speed")
+	var speed float64
+	fmt.Sscanf(speedStr, "%f", &speed)
+	if speed <= 0 {
+		speed = 1.0
+	}
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
+	h.playbackRate = speed
 
 	var current model.Video
 	var next model.Video
@@ -180,11 +204,15 @@ func (h *AppHandler) Ended(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		CurrentVideo *model.Video
-		AutoPlay     bool
+		CurrentVideo   *model.Video
+		AutoPlay       bool
+		Speed          float64
+		ShouldAutoplay bool
 	}{
-		CurrentVideo: targetVideo,
-		AutoPlay:     h.autoPlay,
+		CurrentVideo:   targetVideo,
+		AutoPlay:       h.autoPlay,
+		Speed:          h.playbackRate,
+		ShouldAutoplay: h.autoPlay && found,
 	}
 
 	if err := h.tmpl.ExecuteTemplate(w, "player", data); err != nil {
@@ -192,7 +220,7 @@ func (h *AppHandler) Ended(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Write([]byte("\n<div id=\"playlist-container\" hx-swap-oob=\"true\" class=\"w-full md:w-[400px] bg-gray-900 border-l border-gray-800 flex flex-col h-[50vh] md:h-screen shrink-0\">\n"))
+	w.Write([]byte("\n<aside id=\"playlist-container\" hx-swap-oob=\"true\" class=\"w-full md:w-[400px] bg-white border-l border-carbon-gray-20 flex flex-col h-[50vh] md:h-screen shrink-0 relative z-20 shadow-xl\">\n"))
 	if err := h.tmpl.ExecuteTemplate(w, "playlist", struct {
 		Sections     []model.Section
 		CurrentVideo *model.Video
@@ -202,5 +230,5 @@ func (h *AppHandler) Ended(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		http.Error(w, fmt.Sprintf("template rendering failed: %v", err), http.StatusInternalServerError)
 	}
-	w.Write([]byte("\n</div>"))
+	w.Write([]byte("\n</aside>"))
 }
